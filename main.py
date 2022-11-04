@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import filedialog
+from tkinter import Button
 
 
 def print_localised_surnames():
@@ -78,7 +79,13 @@ def print_localised_titles():
 
 
 root = tk.Tk()
-root.withdraw()
 
-#print_localised_surnames()
-print_localised_titles()
+buttons = [
+    Button(root, text="Localize surnames", command=print_localised_surnames),
+    Button(root, text="Localize titles", command=print_localised_titles)
+]
+
+for button in buttons:
+    button.pack()
+
+root.mainloop()
