@@ -3,9 +3,6 @@ from tkinter import filedialog
 
 
 def print_localised_surnames():
-    root = tk.Tk()
-    root.withdraw()
-
     file_path = filedialog.askopenfilename()
 
     # get only the lines with "name = ..."
@@ -24,4 +21,64 @@ def print_localised_surnames():
         save_file.writelines(lines)
 
 
-print_localised_surnames()
+def print_localised_titles():
+    file_path = filedialog.askopenfilename()
+
+    title_types = ('e', 'k', 'd', 'c', 'b')
+    title_names = {
+        'e': 'Empires',
+        'k': 'Kingdoms',
+        'd': 'Duchies',
+        'c': 'Counties',
+        'b': 'Baronies'
+    }
+
+    prefixes = tuple("{}_".format(title_type) for title_type in title_types)
+
+    lines = [line.lstrip() for line in open(file_path)]
+    new_lines = []
+
+    for line in lines:
+        if line.startswith(prefixes):
+            new_lines.append(line)
+        elif line.startswith("capital = "):
+            new_lines.append(line.replace("capital = ", "").rstrip())
+
+    lines = [line.partition(" ")[0] for line in new_lines]
+    print(lines)
+    lines = [line.partition("_") for line in set(lines)]
+    print(lines)
+
+    title_groups = {}
+
+    for line in lines:
+        title_type = line[0]
+        title_name = line[2]
+
+        if title_type not in title_groups.keys():
+            title_groups[title_type] = []
+
+        title_groups[title_type].append(title_name)
+
+    with filedialog.asksaveasfile(mode='w', defaultextension=".txt") as save_file:
+        if save_file is None:  # asksaveasfile return `None` if dialog closed with "cancel".
+            return
+
+        for title_type in title_types:
+            title_collection = []
+
+            for title in title_groups[title_type]:
+                title_id = "{}_{}".format(title_type, title)
+                localised_title = title.replace("_", " ").title() # capitalise and replace underscores
+
+                title_collection.append("{}: \"{}\"\n".format(title_id, localised_title))
+
+            save_file.write("#{}\n".format(title_names[title_type]))
+            save_file.writelines(sorted(title_collection))
+
+
+root = tk.Tk()
+root.withdraw()
+
+#print_localised_surnames()
+print_localised_titles()
