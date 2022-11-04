@@ -6,6 +6,9 @@ from tkinter import Button
 def print_localised_surnames():
     file_path = filedialog.askopenfilename()
 
+    if file_path is None:
+        return
+
     # get only the lines with "name = ..."
     lines = [line for line in open(file_path) if "name" in line]
     # cut everything to the left of "=", remove quotes and line breaks
@@ -24,6 +27,9 @@ def print_localised_surnames():
 
 def print_localised_titles():
     file_path = filedialog.askopenfilename()
+
+    if file_path is None:
+        return
 
     title_types = ('e', 'k', 'd', 'c', 'b')
     title_names = {
