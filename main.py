@@ -6,7 +6,7 @@ from tkinter import Button
 def print_localised_surnames():
     file_path = filedialog.askopenfilename()
 
-    if file_path is None:
+    if file_path is None or file_path == '':
         return
 
     # get only the lines with "name = ..."
@@ -17,9 +17,6 @@ def print_localised_surnames():
                  .rstrip('\n') for line in lines]
 
     with filedialog.asksaveasfile(mode='w', defaultextension=".txt") as save_file:
-        if save_file is None:  # asksaveasfile return `None` if dialog closed with "cancel".
-            return
-
         lines = ["{0}: \"{1}\"\n".format(line, line.replace("dynn_", "")) for line in lines]
 
         save_file.writelines(lines)
@@ -28,7 +25,7 @@ def print_localised_surnames():
 def print_localised_titles():
     file_path = filedialog.askopenfilename()
 
-    if file_path is None:
+    if file_path is None or file_path == '':
         return
 
     title_types = ('e', 'k', 'd', 'c', 'b')
@@ -68,9 +65,6 @@ def print_localised_titles():
         title_groups[title_type].append(title_name)
 
     with filedialog.asksaveasfile(mode='w', defaultextension=".txt") as save_file:
-        if save_file is None:  # asksaveasfile return `None` if dialog closed with "cancel".
-            return
-
         for title_type in title_types:
             title_collection = []
 
