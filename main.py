@@ -1,17 +1,12 @@
 import tkinter as tk
-from tkinter import filedialog
-from tkinter import Button
-from tkinter import Radiobutton
-from tkinter import Frame
+from tkinter import filedialog, Button, Radiobutton
 
 from enum import Enum
 
-from typing import Union
-from typing import Callable
-from typing import Iterable
+from typing import Union, Callable, Iterable, Mapping
 
 from os import listdir
-from os.path import isfile, join
+from os.path import isfile, join, basename
 
 import itertools
 
@@ -26,10 +21,14 @@ def change_selection_mode(new_mode: SelectionMode):
     selectionMode = new_mode
 
 
-def preprocess_input(src_lines: Iterable[str]) -> Iterable[str]:
-    lines = [line.strip() for line in src_lines]
+def join_file_contents(src: Mapping[str, Iterable[str]]) -> Iterable[str]:
+    return itertools.chain(*src.values())
 
-    return lines
+
+def preprocess_input(src: Mapping[str, Iterable[str]]) -> Mapping[str, Iterable[str]]:
+    src = {file_name: [line.strip() for line in file_content] for (file_name, file_content) in src.items()}
+
+    return src
 
 
 def postprocess_output(src_lines: Iterable[str]) -> Iterable[str]:
@@ -39,7 +38,9 @@ def postprocess_output(src_lines: Iterable[str]) -> Iterable[str]:
     return lines
 
 
-def localise_surnames(src_lines: Iterable[str]) -> Iterable[str]:
+def localise_surnames(src: Mapping[str, Iterable[str]]) -> Iterable[str]:
+    src_lines = join_file_contents(src)
+
     # get only the lines with "name = ..."
     # cut everything to the left of "=", remove quotes
     lines = [line[7:].replace('"', '')
@@ -51,7 +52,9 @@ def localise_surnames(src_lines: Iterable[str]) -> Iterable[str]:
     return lines
 
 
-def localise_titles(src_lines: Iterable[str]) -> Iterable[str]:
+def localise_titles(src: Mapping[str, Iterable[str]]) -> Iterable[str]:
+    src_lines = join_file_contents(src)
+
     title_names = {
         'e': 'Empires',
         'k': 'Kingdoms',
@@ -101,7 +104,9 @@ def localise_titles(src_lines: Iterable[str]) -> Iterable[str]:
     return result
 
 
-def localise_forenames(src_lines: Iterable[str]) -> Iterable[str]:
+def localise_forenames(src: Mapping[str, Iterable[str]]) -> Iterable[str]:
+    src_lines = join_file_contents(src)
+
     lines = [line.split(' ') for line in src_lines if line.startswith('name =')]
     names = [line[2].strip('"') for line in lines]  # [name, =, "name", comment]
     names = ['{0}: "{0}"'.format(name) for name in sorted(set(names))]
@@ -109,11 +114,24 @@ def localise_forenames(src_lines: Iterable[str]) -> Iterable[str]:
     return names
 
 
-def localise_history(src_lines: Iterable[str]) -> Iterable[str]:
-    return []
+def localise_history(src: Mapping[str, Iterable[str]]) -> Iterable[str]:
+    result = []
+
+    for file_name, file_content in src.items():
+        name = file_name.split('.')[0]
+        culture = next(line for line in file_content if line.startswith("culture"))
+        religion = next(line for line in file_content if line.startswith("religion"))
+
+        result.append("{0} = {{\n"
+                      "\t{1}\n"
+                      "\t{2}\n"
+                      "\tholding = none\n"
+                      "}}\n".format(name, culture, religion))
+
+    return result
 
 
-def main_loop(selection_mode: tk.IntVar, process_function: Union[Callable, None]):
+def main_loop(selection_mode: tk.IntVar, process_function: Union[Callable, None], postprocess: bool):
     if process_function is None:
         return
 
@@ -127,17 +145,25 @@ def main_loop(selection_mode: tk.IntVar, process_function: Union[Callable, None]
     if file_location is None or file_location == '':
         return
 
-    if selection_mode.get() == SelectionMode.SINGLE.value:
-        lines = open(file_location).readlines()
-    elif selection_mode.get() == SelectionMode.FOLDER.value:
-        files = [full_path for file_name in listdir(file_location)
-                 if isfile(full_path := join(file_location, file_name))]
+    file_contents = {}
 
-        lines = itertools.chain(*[open(file_path).readlines() for file_path in files])
+    if selection_mode.get() == SelectionMode.SINGLE.value:
+        file_contents[basename(file_location)] = open(file_location).readlines()
+    elif selection_mode.get() == SelectionMode.FOLDER.value:
+        for file_name in listdir(file_location):
+            full_path = join(file_location, file_name)
+
+            if not isfile(full_path):
+                continue
+
+            file_contents[file_name] = open(full_path).readlines()
     else:
         return
 
-    result = postprocess_output(process_function(preprocess_input(lines)))
+    result = process_function(preprocess_input(file_contents))
+
+    if postprocess:
+        result = postprocess_output(result)
 
     with filedialog.asksaveasfile(mode='w', defaultextension=".txt") as save_file:
         save_file.writelines(result)
@@ -151,10 +177,10 @@ buttons = [
         Radiobutton(window, text='Single file mode', variable=selectionMode, value=SelectionMode.SINGLE.value),
         Radiobutton(window, text='Folder mode', variable=selectionMode, value=SelectionMode.FOLDER.value),
     ], [
-        Button(window, text='Localize surnames', command=lambda: main_loop(selectionMode, localise_surnames)),
-        Button(window, text='Localize forenames', command=lambda: main_loop(selectionMode, localise_forenames)),
-        Button(window, text='Localize titles', command=lambda: main_loop(selectionMode, localise_titles)),
-        Button(window, text='Localize history', command=lambda: main_loop(selectionMode, localise_history)),
+        Button(window, text='Localize surnames', command=lambda: main_loop(selectionMode, localise_surnames, True)),
+        Button(window, text='Localize forenames', command=lambda: main_loop(selectionMode, localise_forenames, True)),
+        Button(window, text='Localize titles', command=lambda: main_loop(selectionMode, localise_titles, True)),
+        Button(window, text='Localize history', command=lambda: main_loop(selectionMode, localise_history, False)),
     ]
 ]
 
