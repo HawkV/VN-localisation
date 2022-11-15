@@ -1,6 +1,8 @@
 import tkinter as tk
 from tkinter import filedialog
 from tkinter import Button
+from tkinter import Radiobutton
+from tkinter import Frame
 
 from enum import Enum
 
@@ -19,20 +21,9 @@ class SelectionMode(Enum):
     FOLDER = 2
 
 
-selectionMode = SelectionMode.FOLDER
-
-
 def change_selection_mode(new_mode: SelectionMode):
     global selectionMode
     selectionMode = new_mode
-
-
-processFunction = None
-
-
-def change_process_function(process_function: Callable):
-    global processFunction
-    processFunction = process_function
 
 
 def preprocess_input(src_lines: Iterable[str]) -> Iterable[str]:
@@ -42,7 +33,8 @@ def preprocess_input(src_lines: Iterable[str]) -> Iterable[str]:
 
 
 def postprocess_output(src_lines: Iterable[str]) -> Iterable[str]:
-    lines = [' {0}\n'.format(line) for line in src_lines if not line.startswith('#')]
+    lines = [line + '\n' if line.startswith('#')
+             else ' {0}\n'.format(line) for line in src_lines]
 
     return lines
 
@@ -60,64 +52,74 @@ def localise_surnames(src_lines: Iterable[str]) -> Iterable[str]:
 
 
 def localise_titles(src_lines: Iterable[str]) -> Iterable[str]:
-    lines = [line.strip() for line in src_lines]
-
     title_names = {
         'e': 'Empires',
         'k': 'Kingdoms',
         'd': 'Duchies',
         'c': 'Counties',
-        'b': 'Baronies'
+        'b': 'Baronies',
+        'cn': 'Cultural names',
     }
     title_types = title_names.keys()
     prefixes = tuple("{0}_".format(title_type) for title_type in title_types)
 
-    new_lines = []
+    words = []
 
-    for line in lines:
-        if line.startswith(prefixes):
-            new_lines.append(line)
-        elif line.startswith('capital = '):
-            new_lines.append(line.replace('capital = ', ''))
+    for line in src_lines:
+        words.extend(word for word in line.split(' ') if word.startswith(prefixes))
 
-    lines = [line.partition(' ')[0] for line in new_lines]
-    lines = [line.partition('_') for line in set(lines)]
+    words = [word.split('_', 1) for word in set(words)]
 
     title_groups = {}
 
     result = []
 
-    for line in lines:
-        title_type = line[0]
-        title_name = line[2]
+    for word in words:
+        title_type = word[0]
+        title_name = word[1]
 
         if title_type not in title_groups.keys():
             title_groups[title_type] = []
 
         title_groups[title_type].append(title_name)
 
-        for title_type in title_types:
-            title_collection = []
+    for title_type in title_types:
+        if title_type not in title_groups:
+            continue
 
-            for title in title_groups[title_type]:
-                title_id = '{0}_{1}'.format(title_type, title)
-                localised_title = title.replace('_', ' ').title()  # capitalise and replace underscores
+        title_collection = []
 
-                title_collection.append('{0}: "{1}"'.format(title_id, localised_title))
+        for title in title_groups[title_type]:
+            title_id = '{0}_{1}'.format(title_type, title)
+            localised_title = title.replace('_', ' ').title()  # capitalise and replace underscores
 
-            result.append('#{0}'.format(title_names[title_type]))
-            result.extend(sorted(title_collection))
+            title_collection.append('{0}: "{1}"'.format(title_id, localised_title))
+
+        result.append('#{0}'.format(title_names[title_type]))
+        result.extend(sorted(title_collection))
 
     return result
 
 
-def main_loop(selection_mode: SelectionMode, process_function: Union[Callable, None]):
+def localise_forenames(src_lines: Iterable[str]) -> Iterable[str]:
+    lines = [line.split(' ') for line in src_lines if line.startswith('name =')]
+    names = [line[2].strip('"') for line in lines]  # [name, =, "name", comment]
+    names = ['{0}: "{0}"'.format(name) for name in sorted(set(names))]
+
+    return names
+
+
+def localise_history(src_lines: Iterable[str]) -> Iterable[str]:
+    return []
+
+
+def main_loop(selection_mode: tk.IntVar, process_function: Union[Callable, None]):
     if process_function is None:
         return
 
-    if selection_mode == SelectionMode.SINGLE:
+    if selection_mode.get() == SelectionMode.SINGLE.value:
         file_location = filedialog.askopenfilename()
-    elif selection_mode == SelectionMode.FOLDER:
+    elif selection_mode.get() == SelectionMode.FOLDER.value:
         file_location = filedialog.askdirectory()
     else:
         return
@@ -125,9 +127,9 @@ def main_loop(selection_mode: SelectionMode, process_function: Union[Callable, N
     if file_location is None or file_location == '':
         return
 
-    if selection_mode == SelectionMode.SINGLE:
+    if selection_mode.get() == SelectionMode.SINGLE.value:
         lines = open(file_location).readlines()
-    elif selection_mode == SelectionMode.FOLDER:
+    elif selection_mode.get() == SelectionMode.FOLDER.value:
         files = [full_path for file_name in listdir(file_location)
                  if isfile(full_path := join(file_location, file_name))]
 
@@ -141,19 +143,24 @@ def main_loop(selection_mode: SelectionMode, process_function: Union[Callable, N
         save_file.writelines(result)
 
 
-root = tk.Tk()
+window = tk.Tk()
+selectionMode = tk.IntVar(None, SelectionMode.SINGLE.value)
 
-mode_buttons = [
-    Button(root, text='Single file mode', command=lambda: change_selection_mode(SelectionMode.SINGLE)),
-    Button(root, text='Folder mode', command=lambda: change_selection_mode(SelectionMode.FOLDER))
+buttons = [
+    [
+        Radiobutton(window, text='Single file mode', variable=selectionMode, value=SelectionMode.SINGLE.value),
+        Radiobutton(window, text='Folder mode', variable=selectionMode, value=SelectionMode.FOLDER.value),
+    ], [
+        Button(window, text='Localize surnames', command=lambda: main_loop(selectionMode, localise_surnames)),
+        Button(window, text='Localize forenames', command=lambda: main_loop(selectionMode, localise_forenames)),
+        Button(window, text='Localize titles', command=lambda: main_loop(selectionMode, localise_titles)),
+        Button(window, text='Localize history', command=lambda: main_loop(selectionMode, localise_history)),
+    ]
 ]
 
-function_buttons = [
-    Button(root, text='Localize surnames', command=lambda: main_loop(selectionMode, localise_surnames)),
-    Button(root, text='Localize titles', command=lambda: main_loop(selectionMode, localise_titles))
-]
+for group_index in range(len(buttons)):
+    for button_index in range(len(buttons[group_index])):
+        buttons[group_index][button_index].grid(row=group_index, column=button_index, ipadx=5, padx=5, pady=5)
 
-for button in mode_buttons + function_buttons:
-    button.pack()
-
-root.mainloop()
+window.title("amazing pro mlg utilita from russia with love")
+window.mainloop()
