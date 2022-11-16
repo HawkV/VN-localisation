@@ -115,20 +115,25 @@ def localise_forenames(src: Mapping[str, Iterable[str]]) -> Iterable[str]:
 
 
 def localise_history(src: Mapping[str, Iterable[str]]) -> Iterable[str]:
-    result = []
+    result = {}
 
     for file_name, file_content in src.items():
         name = file_name.split('.')[0]
-        culture = next(line for line in file_content if line.startswith("culture"))
-        religion = next(line for line in file_content if line.startswith("religion"))
+        culture = next((line for line in file_content if line.startswith("culture")), 'culture = none')
+        religion = next((line for line in file_content if line.startswith("religion")), 'religion = none')
 
-        result.append("{0} = {{\n"
-                      "\t{1}\n"
-                      "\t{2}\n"
-                      "\tholding = none\n"
-                      "}}\n".format(name, culture, religion))
+        result[int(name)] = ("{0} = {{\n"
+                             "\t{1}\n"
+                             "\t{2}\n"
+                             "\tholding = none\n"
+                             "}}\n".format(name, culture, religion))
 
-    return result
+    lines = []
+
+    for i in sorted(result.keys()):
+        lines.append(result[i])
+
+    return lines
 
 
 def main_loop(selection_mode: tk.IntVar, process_function: Union[Callable, None], postprocess: bool):
@@ -153,7 +158,7 @@ def main_loop(selection_mode: tk.IntVar, process_function: Union[Callable, None]
         for file_name in listdir(file_location):
             full_path = join(file_location, file_name)
 
-            if not isfile(full_path):
+            if not isfile(full_path) or file_name == '.DS_Store':
                 continue
 
             file_contents[file_name] = open(full_path).readlines()
